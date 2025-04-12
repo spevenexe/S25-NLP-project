@@ -1,8 +1,8 @@
 import uvicorn, os, uuid
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from processor import process_pdf, generate_dummy_questions
-from pydantic import BaseModel
+from processor import process_pdf, generate_dummy_questions, evaluate_answers
+from schemas import GenerateQuestionsRequest, GenerateQuestionsResponse, SubmitAnswersRequest, SubmitAnswersResponse
 
 app = FastAPI()
 
@@ -14,12 +14,6 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-@app.get("/hello")
-def get_hello():
-    return {
-        "message": "hello world"
-    }
-
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -27,7 +21,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 file_mapping = {}
 
 @app.post("/uploadFile")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...)) -> None:
     # Validate that the file is a PDF
     if not file.content_type == "application/pdf":
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
@@ -49,33 +43,26 @@ async def upload_file(file: UploadFile = File(...)):
         # Process the PDF file (NLP processing)
         process_pdf(file_path)
         
-        return {
-            "filename": file.filename,
-        }
+        return None
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 
-class QuestionGenerationRequest(BaseModel):
-    fileName: str
-    questionCount: int
-
-@app.post("/generateQuestions")
-async def generate_questions(request: QuestionGenerationRequest):
+@app.post("/generateQuestions", response_model = GenerateQuestionsResponse)
+async def generate_questions(request: GenerateQuestionsRequest):
     try:
-        # Check if the file exists in our mapping
-        if request.fileName not in file_mapping:
-            raise HTTPException(status_code=404, detail="File not found. Please upload the file first.")
-        
-        # Get the file path
-        file_path = file_mapping[request.fileName]
-        
-        # For now, generate dummy questions
         questions = generate_dummy_questions(request.questionCount)
-        
-        return questions
-    except HTTPException as http_ex:
-        raise http_ex
+        return {
+            "questions": questions
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+@app.post("/submitAnswers", response_model = SubmitAnswersResponse)
+async def submit_answers(request: SubmitAnswersRequest):
+    try:
+        results = evaluate_answers(request.answers)
+        return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 

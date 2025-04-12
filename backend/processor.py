@@ -3,8 +3,6 @@ import PyPDF2, random
 def process_pdf(file_path):
     text = extract_text_from_pdf(file_path)
 
-
-
 def extract_text_from_pdf(file_path):
     text = ""
     try:
@@ -44,18 +42,40 @@ def generate_dummy_questions(count: int):
         "the data analysis",
         "the conclusion"
     ]
+
+    categories = [
+        "Explain Concept",
+        "Definition",
+        "Application",
+        "Compare/Contrast"
+    ]
     
     questions = []
     for i in range(count):
         question_type = random.choice(question_types)
         topic = random.choice(topics)
+        category = random.choice(categories)
         question_text = f"{question_type} {topic}?"
         
         questions.append({
             "id": i + 1,
             "text": question_text,
-            "difficulty": random.choice(["Easy", "Medium", "Hard"]),
-            "category": random.choice(["Comprehension", "Analysis", "Application", "Evaluation"])
+            "category": category
         })
     
     return questions
+
+def evaluate_answers(answers):
+    # Answer scores is rated on a scale from 0 to 5
+    scores = [random.randint(0, 5) for _ in answers]
+    ids = [i + 1 for i in range(len(answers))]
+    score_list = [{"id": i, "score": float(s)} for i, s in zip(ids, scores)]
+
+    strengths = ["Biology", "Computer Science"]
+    weaknesses = ["Mathematics"]
+
+    return {
+        "strengths": strengths,
+        "weaknesses": weaknesses,
+        "scores": score_list
+    }

@@ -8,7 +8,7 @@ import { Progress } from "./ui/progress"
 import api from "../api"
 
 interface FileUploadProps {
-    onUploadComplete: (fileName: string) => void
+    onUploadComplete: () => void
 }
 
 export function FileUpload({ onUploadComplete }: FileUploadProps) {
@@ -74,8 +74,9 @@ export function FileUpload({ onUploadComplete }: FileUploadProps) {
             if (response.status === 200) {
                 setTimeout(() => {
                     setUploading(false)
+                    setError(null)
                     setUploadComplete(true)
-                    onUploadComplete(file.name)
+                    onUploadComplete()
                 }, 500)
             }
         } catch (err) {

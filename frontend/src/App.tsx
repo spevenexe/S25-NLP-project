@@ -7,26 +7,31 @@ import { FileUpload } from "./components/file-upload"
 import { QuestionGenerator } from "./components/question-generator"
 import { QuestionsPage } from "./components/questions-page"
 
+interface Question {
+  id: number
+  text: string
+  category: string
+}
+
 export default function App() {
   const [uploadComplete, setUploadComplete] = useState(false)
-  const [fileName, setFileName] = useState<string | null>(null)
   const [showQuestions, setShowQuestions] = useState(false)
-  const [questions, setQuestions] = useState<Array<{ id: number; text: string }>>([])
+  const [questions, setQuestions] = useState<Question[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
-  const handleUploadComplete = (name: string) => {
-    setFileName(name)
+  const handleUploadComplete = () => {
     setUploadComplete(true)
   }
 
-  const handleQuestionsGenerated = (generatedQuestions: Array<{ id: number; text: string }>) => {
+  const handleQuestionsGenerated = (generatedQuestions: Question[]) => {
     setQuestions(generatedQuestions)
     setShowQuestions(true)
     setIsLoading(false)
   }
 
+  // If we have questions to show, render the QuestionsPage
   if (showQuestions) {
-    return <QuestionsPage questions={questions} fileName={fileName || ""} />
+    return <QuestionsPage questions={questions} />
   }
 
   return (
@@ -65,7 +70,6 @@ export default function App() {
           {uploadComplete && (
             <Card className="p-8 bg-black/40 border border-purple-500/30 backdrop-blur-sm">
               <QuestionGenerator
-                fileName={fileName || ""}
                 onQuestionsGenerated={handleQuestionsGenerated}
                 setIsLoading={setIsLoading}
               />
