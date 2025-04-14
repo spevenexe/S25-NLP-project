@@ -1,4 +1,24 @@
-import PyPDF2, random
+import PyPDF2, random, os, uuid
+
+async def save_file(file):
+    UPLOAD_DIR = "uploads"
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    file_mapping = {}
+    # Generate a unique filename to prevent overwrites
+    file_extension = os.path.splitext(file.filename)[1]
+    unique_filename = f"{uuid.uuid4()}{file_extension}"
+    file_path = os.path.join(UPLOAD_DIR, unique_filename)
+    
+    # Save the uploaded file
+    with open(file_path, "wb") as buffer:
+        contents = await file.read()
+        buffer.write(contents)
+    
+    # Store the mapping between original filename and path
+    file_mapping[file.filename] = file_path
+    
+    # Process the PDF file (NLP processing)
+    process_pdf(file_path)
 
 def process_pdf(file_path):
     text = extract_text_from_pdf(file_path)
