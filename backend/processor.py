@@ -18,6 +18,7 @@ document_text = ""
 text_chunks = []
 
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
+pipeline_type = "text-generation" if torch.cuda.is_available() else "text2text-generation"
 question_gen_model = None
 question_gen_tokenizer = None
 evaluation_model = None
@@ -102,13 +103,13 @@ def extract_text_from_pdf(file_path):
     return text
 
 def generate_questions(count: int):
-    global document_vectorstore, text_chunks, question_gen_model, question_gen_tokenizer,device
+    global document_vectorstore, text_chunks, question_gen_model, question_gen_tokenizer,device,pipeline_type
     
     if not document_vectorstore or not text_chunks:
         return generate_dummy_questions(count)
     
     question_gen_pipe = pipeline(
-        "text2text-generation", 
+        pipeline_type, 
         model=question_gen_model, 
         tokenizer=question_gen_tokenizer,
         max_length=64,
