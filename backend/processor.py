@@ -1,7 +1,7 @@
 # processor.py
 import PyPDF2, os, uuid
 import torch
-from transformers import AutoTokenizer, AutoModel, AutoModelForSeq2SeqLM
+from transformers import AutoTokenizer, AutoModel, AutoModelForSeq2SeqLM, BitsAndBytesConfig, AutoModelForCausalLM
 from sentence_transformers import SentenceTransformer
 from langchain_community.llms import HuggingFacePipeline
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -17,6 +17,7 @@ document_vectorstore = None
 document_text = ""
 text_chunks = []
 
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
 question_gen_model = None
 question_gen_tokenizer = None
 evaluation_model = None
@@ -25,13 +26,21 @@ evaluation_tokenizer = None
 def initialize_models():
     global question_gen_model, question_gen_tokenizer, evaluation_model, evaluation_tokenizer
     
-    question_model_name = "google/flan-t5-base"
+    if torch.cuda.is_available():
+        question_model_name = "meta-llama/Llama-3.1-8B"
+        bnb_config = BitsAndBytesConfig(load_in_4bit=True,bnb_4bit_use_double_quant=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16)
+        question_gen_model = AutoModelForCausalLM.from_pretrained(question_model_name,quantization_config=bnb_config)
+    else:
+        question_model_name = "google/flan-t5-base"
+        question_gen_model = AutoModelForSeq2SeqLM.from_pretrained(question_model_name)
+
     question_gen_tokenizer = AutoTokenizer.from_pretrained(question_model_name)
-    question_gen_model = AutoModelForSeq2SeqLM.from_pretrained(question_model_name)
     
-    eval_model_name = "google/flan-t5-base"  
-    evaluation_tokenizer = AutoTokenizer.from_pretrained(eval_model_name)
-    evaluation_model = AutoModelForSeq2SeqLM.from_pretrained(eval_model_name)
+    # eval_model_name = "google/flan-t5-base"  
+    # evaluation_tokenizer = AutoTokenizer.from_pretrained(eval_model_name)
+    # evaluation_model = AutoModelForSeq2SeqLM.from_pretrained(eval_model_name)
+    evaluation_tokenizer = question_gen_tokenizer
+    evaluation_model = question_gen_model
     
     print("Hugging Face models initialized successfully")
 
@@ -93,7 +102,7 @@ def extract_text_from_pdf(file_path):
     return text
 
 def generate_questions(count: int):
-    global document_vectorstore, text_chunks, question_gen_model, question_gen_tokenizer
+    global document_vectorstore, text_chunks, question_gen_model, question_gen_tokenizer,device
     
     if not document_vectorstore or not text_chunks:
         return generate_dummy_questions(count)
@@ -102,7 +111,8 @@ def generate_questions(count: int):
         "text2text-generation", 
         model=question_gen_model, 
         tokenizer=question_gen_tokenizer,
-        max_length=64
+        max_length=64,
+        device=device
     )
     
     categories = [
