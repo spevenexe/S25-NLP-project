@@ -38,15 +38,6 @@ async def generate_questions_endpoint(request: GenerateQuestionsRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
-@app.post("/generateAnswer", response_model=GenerateAnswerResponse)
-async def generate_answer_endpoint(request: GenerateAnswerRequest):
-    try:
-        answer = auto_generate_answer(request.question)
-        return {
-            "answer": answer
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 @app.post("/submitAnswers", response_model=SubmitAnswersResponse)
 async def submit_answers_endpoint(request: SubmitAnswersRequest):

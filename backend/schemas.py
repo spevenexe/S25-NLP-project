@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Dict, Optional, Union, Any
+from typing import List, Optional
 
 class GenerateQuestionsRequest(BaseModel):
     questionCount: int

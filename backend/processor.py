@@ -222,37 +222,6 @@ def generate_dummy_questions(count: int):
     
     return questions
 
-def auto_generate_answer(question_text: str) -> str:
-    global document_vectorstore, evaluation_model, evaluation_tokenizer
-    
-    if not document_vectorstore:
-        return "No document has been uploaded to generate an answer."
-    
-    try:
-        retriever = document_vectorstore.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": 3}
-        )
-        contexts = retriever.get_relevant_documents(question_text)
-        
-        context_text = " ".join([doc.page_content for doc in contexts])
-        
-        answer_gen_pipe = pipeline(
-            "text2text-generation",
-            model=evaluation_model,
-            tokenizer=evaluation_tokenizer,
-            max_length=200
-        )
-        
-        prompt = f"Context: {context_text}\n\nQuestion: {question_text}\n\nAnswer:"
-        answer = answer_gen_pipe(prompt)[0]["generated_text"]
-        
-        return answer
-        
-    except Exception as e:
-        print(f"Error generating answer: {str(e)}")
-        return f"Unable to generate answer due to an error: {str(e)}"
-
 def evaluate_answers(answers):
     global document_vectorstore, evaluation_model, evaluation_tokenizer
     
