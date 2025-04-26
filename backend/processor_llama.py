@@ -18,9 +18,6 @@ document_vectorstore = None
 document_text = ""
 text_chunks = []
 
-CUDA_MODE = torch.cuda.is_available()
-device = "cuda:0" if CUDA_MODE else "cpu"
-pipeline_type = "text-generation" if CUDA_MODE else "text2text-generation"
 question_gen_model = None
 question_gen_tokenizer = None
 evaluation_model = None
@@ -29,19 +26,11 @@ evaluation_tokenizer = None
 def initialize_models():
     global question_gen_model, question_gen_tokenizer, evaluation_model, evaluation_tokenizer
     
-    if CUDA_MODE:
-        question_model_name = "meta-llama/Llama-3.1-8B"
-        bnb_config = BitsAndBytesConfig(load_in_4bit=True,bnb_4bit_use_double_quant=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16)
-        question_gen_model = AutoModelForCausalLM.from_pretrained(question_model_name,quantization_config=bnb_config)
-    else:
-        question_model_name = "google/flan-t5-base"
-        question_gen_model = AutoModelForSeq2SeqLM.from_pretrained(question_model_name)
-
+    question_model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
+    bnb_config = BitsAndBytesConfig(load_in_4bit=True,bnb_4bit_use_double_quant=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16)
+    question_gen_model = AutoModelForCausalLM.from_pretrained(question_model_name,quantization_config=bnb_config)
     question_gen_tokenizer = AutoTokenizer.from_pretrained(question_model_name)
     
-    # eval_model_name = "google/flan-t5-base"  
-    # evaluation_tokenizer = AutoTokenizer.from_pretrained(eval_model_name)
-    # evaluation_model = AutoModelForSeq2SeqLM.from_pretrained(eval_model_name)
     evaluation_tokenizer = question_gen_tokenizer
     evaluation_model = question_gen_model
     
@@ -105,25 +94,18 @@ def extract_text_from_pdf(file_path):
     return text
 
 def generate_questions(count: int):
-    global document_vectorstore, text_chunks, question_gen_model, question_gen_tokenizer,device,pipeline_type
+    global document_vectorstore, text_chunks, question_gen_model, question_gen_tokenizer
     
     if not document_vectorstore or not text_chunks:
         return generate_dummy_questions(count)
     
-    question_gen_pipe:Pipeline
-    if CUDA_MODE:
-        question_gen_pipe = pipeline(
-            pipeline_type, 
-            model=question_gen_model, 
-            tokenizer=question_gen_tokenizer,
-        )
-    else:
-        question_gen_pipe = pipeline(
-            pipeline_type, 
-            model=question_gen_model, 
-            tokenizer=question_gen_tokenizer,
-            max_length=64,
-        )
+    question_gen_pipe = pipeline(
+        "text-generation",
+        model=question_gen_model, 
+        tokenizer=question_gen_tokenizer,
+        model_kwargs={"torch_dtype": torch.bfloat16},
+        device_map="auto",
+    )
     
     categories = [
         "Explain Concept",
@@ -239,7 +221,7 @@ def evaluate_answers(answers):
     
     try:
         eval_pipe = pipeline(
-            "text2text-generation",
+            "text-generation",
             model=evaluation_model,
             tokenizer=evaluation_tokenizer,
             max_length=100
