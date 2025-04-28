@@ -2,10 +2,12 @@ import uvicorn
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 # from processor_flan import save_file, generate_questions, evaluate_answers
-import processor_flan
-import processor_llama
 import torch
-processor = processor_llama if torch.cuda.is_available() else processor_flan
+if torch.cuda.is_available():
+    import processor_llama as processor
+else: 
+    import processor_flan as processor
+
 save_file = processor.save_file
 generate_questions = processor.generate_questions
 evaluate_answers = processor.evaluate_answers

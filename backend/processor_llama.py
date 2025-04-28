@@ -13,10 +13,13 @@ from transformers import pipeline
 from transformers.pipelines.base import Pipeline
 import numpy as np
 from typing import List, Dict, Any
+import traceback
 
 document_vectorstore = None
 document_text = ""
 text_chunks = []
+
+questions = []
 
 question_gen_model = None
 question_gen_tokenizer = None
@@ -94,7 +97,7 @@ def extract_text_from_pdf(file_path):
     return text
 
 def generate_questions(count: int):
-    global document_vectorstore, text_chunks, question_gen_model, question_gen_tokenizer
+    global document_vectorstore, text_chunks, question_gen_model, question_gen_tokenizer, questions
     
     if not document_vectorstore or not text_chunks:
         return generate_dummy_questions(count)
@@ -106,6 +109,10 @@ def generate_questions(count: int):
         model_kwargs={"torch_dtype": torch.bfloat16},
         device_map="auto",
     )
+    terminators = [
+        question_gen_pipe.tokenizer.eos_token_id,
+        question_gen_pipe.tokenizer.convert_tokens_to_ids("<|eot_id|>")
+    ]
     
     categories = [
         "Explain Concept",
@@ -115,11 +122,13 @@ def generate_questions(count: int):
     ]
     
     category_prompts = {
-        "Explain Concept": "Generate a question asking to explain a concept in this text: {text}",
-        "Definition": "Generate a question asking for a definition from this text: {text}",
-        "Application": "Generate a question about applying concepts from this text: {text}",
-        "Compare/Contrast": "Generate a question comparing or contrasting ideas from this text: {text}"
+        "Explain Concept": "Generate a question asking to explain a concept from this excerpt",
+        "Definition": "Generate a question asking for a definition from this excerpt",
+        "Application": "Generate a question about applying concepts from this excerpt",
+        "Compare/Contrast": "Generate a question comparing or contrasting ideas from this excerpt"
     }
+    
+    prompt_template = "Consider the following excerpt, which is surrounded by lines of \"###\":\n###\n{text}\n###\n{category}. Do not print anything else. Do not mention the excerpt or the author. The question should be standalone."
     
     questions = []
     
@@ -132,11 +141,26 @@ def generate_questions(count: int):
             
         category = np.random.choice(categories)
         
-        prompt_template = category_prompts[category]
-        prompt = prompt_template.format(text=chunk[:200])
+        category_question = category_prompts[category]
+        prompt = prompt_template.format(text=chunk[:200],category=category_question)
+        
+        messages = [
+            {"role": "system", "content": "You are a helpful chatbot who generates flashcard-like quiz questions."},
+            {"role": "user", "content": prompt},
+        ]
         
         try:
-            question_text = question_gen_pipe(prompt)[0]["generated_text"]
+            outputs = question_gen_pipe(
+                    messages,
+                    max_new_tokens=64,
+                    eos_token_id=terminators,
+                    pad_token_id = question_gen_pipe.tokenizer.eos_token_id,
+                    do_sample=True,
+                    temperature=0.6,
+                    top_p=0.9,
+                )[0]["generated_text"]
+            
+            question_text = outputs[-1]['content']
             
             if not question_text.endswith("?"):
                 question_text += "?"
@@ -144,14 +168,16 @@ def generate_questions(count: int):
             questions.append({
                 "id": i + 1,
                 "text": question_text,
-                "category": category
+                "category": category,
+                "dialogue" : outputs
             })
         except Exception as e:
             print(f"Error generating question: {str(e)}")
             questions.append({
                 "id": i + 1,
                 "text": f"What is the main point of this excerpt: '{chunk[:50]}...'?",
-                "category": category
+                "category": category,
+                "dialogue" : []
             })
     
     if len(questions) < count:
@@ -214,7 +240,7 @@ def generate_dummy_questions(count: int):
     return questions
 
 def evaluate_answers(answers):
-    global document_vectorstore, evaluation_model, evaluation_tokenizer
+    global document_vectorstore, evaluation_model, evaluation_tokenizer, questions
     
     if not document_vectorstore:
         return _generate_random_evaluation(answers)
@@ -222,11 +248,15 @@ def evaluate_answers(answers):
     try:
         eval_pipe = pipeline(
             "text-generation",
-            model=evaluation_model,
-            tokenizer=evaluation_tokenizer,
-            max_length=100
+            model=question_gen_model, 
+            tokenizer=question_gen_tokenizer,
+            model_kwargs={"torch_dtype": torch.bfloat16},
+            device_map="auto",
         )
-        
+        terminators = [
+            eval_pipe.tokenizer.eos_token_id,
+            eval_pipe.tokenizer.convert_tokens_to_ids("<|eot_id|>")
+        ]
         retriever = document_vectorstore.as_retriever(
             search_type="similarity",
             search_kwargs={"k": 3}
@@ -237,20 +267,19 @@ def evaluate_answers(answers):
         
         for i, answer_obj in enumerate(answers):
             answer_id = i + 1
-            answer_text = answer_obj.get("text", "")
-            question_text = answer_obj.get("question", "Question not provided")
-            category = answer_obj.get("category", "Unknown")
+            answer_text = answer_obj.text
+            question_i = [q for q in questions if q["id"] == answer_id][0]
+            question_text = question_i["text"]
+            category = question_i["category"]
+            dialogue = question_i["dialogue"]
             
             try:
-                contexts = retriever.get_relevant_documents(question_text)
-                context_text = " ".join([doc.page_content for doc in contexts])
+                # contexts = retriever.get_relevant_documents(question_text)
+                # context_text = " ".join([doc.page_content for doc in contexts])
                 
                 eval_prompt = f"""
-                Context: {context_text}
-                
-                Question: {question_text}
-                
-                Answer to evaluate: {answer_text}
+                This is my answer:
+                {answer_text}
                 
                 Evaluate the answer on a scale from 0 to 5, where:
                 0: Completely incorrect or irrelevant
@@ -263,7 +292,22 @@ def evaluate_answers(answers):
                 Return only the numeric score.
                 """
                 
-                eval_result = eval_pipe(eval_prompt)[0]["generated_text"]
+                messages = dialogue + [{
+                    "role":"user",
+                    "content":eval_prompt
+                }]
+                
+                outputs = eval_pipe(
+                    messages,
+                    max_new_tokens=64,
+                    eos_token_id=terminators,
+                    pad_token_id = eval_pipe.tokenizer.eos_token_id,
+                    do_sample=True,
+                    temperature=0.6,
+                    top_p=0.9,
+                )[0]["generated_text"]
+                
+                eval_result:str = outputs[-1]['content']
                 
                 score_text = eval_result.strip()
                 if score_text.replace('.', '', 1).isdigit():
@@ -281,7 +325,8 @@ def evaluate_answers(answers):
                 answer_analysis[category]["total"] += score
                 
             except Exception as e:
-                print(f"Error evaluating answer {answer_id}: {str(e)}")
+                print(f"Error evaluating answer {answer_id}:")
+                print(traceback.format_exc())
                 score = 3.0  
             
             scores.append({"id": answer_id, "score": score})
