@@ -1,7 +1,6 @@
 import uvicorn
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-# from processor_flan import save_file, generate_questions, evaluate_answers
 import torch
 if torch.cuda.is_available():
     import processor_llama as processor
@@ -11,10 +10,10 @@ else:
 save_file = processor.save_file
 generate_questions = processor.generate_questions
 evaluate_answers = processor.evaluate_answers
+regenerate_tailored_questions = processor.regenerate_tailored_questions
 
-from pydantic import BaseModel
-from typing import List, Dict, Optional, Union, Any
-from schemas import GenerateQuestionsRequest, GenerateQuestionsResponse, SubmitAnswersRequest, SubmitAnswersResponse, GenerateAnswerResponse, GenerateAnswerRequest 
+from typing import Dict
+from schemas import GenerateQuestionsRequest, GenerateQuestionsResponse, SubmitAnswersRequest, SubmitAnswersResponse, RegenerateTailoredQuestionsRequest 
 
 app = FastAPI()
 
@@ -41,6 +40,17 @@ async def upload_file(file: UploadFile = File(...)) -> Dict[str, str]:
 async def generate_questions_endpoint(request: GenerateQuestionsRequest):
     try:
         questions = generate_questions(request.questionCount)
+        return {
+            "questions": questions
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+
+@app.post("/regenerateTailoredQuestions", response_model=GenerateQuestionsResponse)
+async def generate_questions_endpoint(request: RegenerateTailoredQuestionsRequest):
+    try:
+        questions = regenerate_tailored_questions(request.questionCount, request.weaknesses)
         return {
             "questions": questions
         }

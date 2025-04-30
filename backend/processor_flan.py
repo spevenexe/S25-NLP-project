@@ -1,6 +1,5 @@
 # processor.py
 import PyPDF2, os, uuid
-import torch
 from transformers import AutoTokenizer, AutoModel, AutoModelForSeq2SeqLM, BitsAndBytesConfig, AutoModelForCausalLM
 from sentence_transformers import SentenceTransformer
 from langchain_community.llms import HuggingFacePipeline
@@ -12,7 +11,7 @@ from langchain.prompts import PromptTemplate
 from transformers import pipeline
 from transformers.pipelines.base import Pipeline
 import numpy as np
-from typing import List, Dict, Any
+from typing import List
 
 document_vectorstore = None
 document_text = ""
@@ -214,6 +213,57 @@ def generate_dummy_questions(count: int):
         })
     
     return questions
+
+def regenerate_tailored_questions(count: int, weaknesses: List[str]):
+    import random
+    
+    question_types = [
+        "What is the main idea of", 
+        "Explain the concept of", 
+        "How does the author describe", 
+        "What evidence supports", 
+        "Compare and contrast", 
+        "Analyze the relationship between", 
+        "What are the implications of", 
+        "Describe the significance of", 
+        "How would you apply the concept of", 
+        "What conclusions can be drawn about"
+    ]
+    
+    topics = [
+        "the introduction", 
+        "the methodology", 
+        "the results section", 
+        "the discussion", 
+        "the literature review", 
+        "the theoretical framework", 
+        "the case study", 
+        "the author's argument", 
+        "the data analysis", 
+        "the conclusion"
+    ]
+    
+    categories = [
+        "Explain Concept",
+        "Definition",
+        "Application",
+        "Compare/Contrast"
+    ]
+    
+    questions = []
+    for i in range(count):
+        question_type = random.choice(question_types)
+        topic = random.choice(topics)
+        category = random.choice(categories)
+        question_text = f"{question_type} {topic}?"
+        questions.append({
+            "id": i + 1,
+            "text": question_text,
+            "category": category,
+        })
+    
+    return questions
+
 
 def evaluate_answers(answers):
     global document_vectorstore, evaluation_model, evaluation_tokenizer

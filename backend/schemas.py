@@ -1,16 +1,23 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Union
 
 class GenerateQuestionsRequest(BaseModel):
     questionCount: int
+
+class RegenerateTailoredQuestionsRequest(BaseModel):
+    questionCount: int
+    weaknesses: List[str]
 
 class Question(BaseModel):
     id: int
     text: str
     category: str
 
+class ExtendedQuestion(Question):
+    dialogue: List[str]
+
 class GenerateQuestionsResponse(BaseModel):
-    questions: List[Question]
+    questions: List[Union[Question, ExtendedQuestion]]
 
 class AnswerSubmission(BaseModel):
     id: Optional[int] = None

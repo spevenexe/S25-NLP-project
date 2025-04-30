@@ -60,8 +60,9 @@ export function ResultsPage({
     setIsLoading(true)
     try {
       // Call the API to generate new questions
-      const response = await api.post<GenerateQuestionsResponse>("/generateQuestions", {
+      const response = await api.post<GenerateQuestionsResponse>("/regenerateTailoredQuestions", {
         questionCount,
+        "weaknesses" : results.weaknesses
       })
 
       if (response.status === 200 && response.data && onRegenerateQuiz) {

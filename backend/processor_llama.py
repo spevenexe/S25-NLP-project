@@ -12,8 +12,8 @@ from langchain.prompts import PromptTemplate
 from transformers import pipeline
 from transformers.pipelines.base import Pipeline
 import numpy as np
-from typing import List, Dict, Any
 import traceback
+from typing import List
 
 document_vectorstore = None
 document_text = ""
@@ -238,6 +238,16 @@ def generate_dummy_questions(count: int):
         })
     
     return questions
+
+def regenerate_tailored_questions(count: int, weaknesses: List[str]):
+    return [
+        {
+            "id": 1,
+            "text": f"What is the main point of this excerpt?",
+            "category": "category",
+            "dialogue" : []
+        }
+    ]
 
 def evaluate_answers(answers):
     global document_vectorstore, evaluation_model, evaluation_tokenizer, questions
