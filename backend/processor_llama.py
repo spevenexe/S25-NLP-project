@@ -128,7 +128,7 @@ def generate_questions(count: int):
         "Compare/Contrast": "Generate a question comparing or contrasting ideas from this excerpt"
     }
     
-    prompt_template = "Consider the following excerpt, which is surrounded by lines of \"###\":\n###\n{text}\n###\n{category}. Do not print anything else. Do not mention the excerpt or the author. The question should be standalone."
+    prompt_template = "Consider the following excerpt, which is surrounded by lines of \"###\":\n###\n{text}\n###\n{category}. Do not print anything else. Do not mention the excerpt, the text, or the author. The question should be standalone."
     
     questions = []
     
@@ -240,14 +240,99 @@ def generate_dummy_questions(count: int):
     return questions
 
 def regenerate_tailored_questions(count: int, weaknesses: List[str]):
-    return [
-        {
-            "id": 1,
-            "text": f"What is the main point of this excerpt?",
-            "category": "category",
-            "dialogue" : []
-        }
+    global document_vectorstore, text_chunks, question_gen_model, question_gen_tokenizer, questions
+    print(weaknesses) 
+    
+    if not document_vectorstore or not text_chunks:
+        return generate_dummy_questions(count)
+    
+    question_gen_pipe = pipeline(
+        "text-generation",
+        model=question_gen_model, 
+        tokenizer=question_gen_tokenizer,
+        model_kwargs={"torch_dtype": torch.bfloat16},
+        device_map="auto",
+    )
+    terminators = [
+        question_gen_pipe.tokenizer.eos_token_id,
+        question_gen_pipe.tokenizer.convert_tokens_to_ids("<|eot_id|>")
     ]
+    
+    categories = [
+        "Explain Concept",
+        "Definition",
+        "Application",
+        "Compare/Contrast"
+    ]
+    
+    category_prompts = {
+        "Explain Concept": "Generate a question asking to explain a concept from this excerpt",
+        "Definition": "Generate a question asking for a definition from this excerpt",
+        "Application": "Generate a question about applying concepts from this excerpt",
+        "Compare/Contrast": "Generate a question comparing or contrasting ideas from this excerpt"
+    }
+    
+    prompt_template = "Consider the following excerpt, which is surrounded by lines of \"###\":\n###\n{text}\n###\n{category}. The question should be focused on one of the listed topcs:\n{weaknesses}\n Do not print anything else. Do not mention the excerpt, the text, or the author. The question should be standalone."
+    
+    bulleted_weak_topics = '- ' + '\n- '.join(w for w in weaknesses)
+    
+    questions = []
+    
+    sample_size = min(count, len(text_chunks))
+    selected_chunks = np.random.choice(text_chunks, size=sample_size, replace=False)
+    
+    for i, chunk in enumerate(selected_chunks):
+        if i >= count:
+            break
+            
+        category = np.random.choice(categories)
+        
+        category_question = category_prompts[category]
+        prompt = prompt_template.format(text=chunk[:200],category=category_question,weaknesses=bulleted_weak_topics)
+        
+        messages = [
+            {"role": "system", "content": "You are a helpful chatbot who generates flashcard-like quiz questions."},
+            {"role": "user", "content": prompt},
+        ]
+        
+        try:
+            outputs = question_gen_pipe(
+                    messages,
+                    max_new_tokens=64,
+                    eos_token_id=terminators,
+                    pad_token_id = question_gen_pipe.tokenizer.eos_token_id,
+                    do_sample=True,
+                    temperature=0.6,
+                    top_p=0.9,
+                )[0]["generated_text"]
+            
+            question_text = outputs[-1]['content']
+            
+            if not question_text.endswith("?"):
+                question_text += "?"
+            
+            questions.append({
+                "id": i + 1,
+                "text": question_text,
+                "category": category,
+                "dialogue" : outputs
+            })
+        except Exception as e:
+            print(f"Error generating question: {str(e)}")
+            questions.append({
+                "id": i + 1,
+                "text": f"What is the main point of this excerpt: '{chunk[:50]}...'?",
+                "category": category,
+                "dialogue" : []
+            })
+    
+    if len(questions) < count:
+        dummy_questions = generate_dummy_questions(count - len(questions))
+        for i, q in enumerate(dummy_questions):
+            q["id"] = len(questions) + i + 1
+        questions.extend(dummy_questions)
+        
+    return questions
 
 def evaluate_answers(answers):
     global document_vectorstore, evaluation_model, evaluation_tokenizer, questions
@@ -274,6 +359,7 @@ def evaluate_answers(answers):
         
         scores = []
         answer_analysis = {}
+        topics = []
         
         for i, answer_obj in enumerate(answers):
             answer_id = i + 1
@@ -328,6 +414,36 @@ def evaluate_answers(answers):
                 
                 score = max(0, min(5, score))
                 
+                # get study topics
+                topic_prompt = \
+                """
+                What specific field of study would you say this topic is in? {existing}Just print the field of study and nothing else.
+                """
+                existing = '' if len(answer_analysis) == 0 else \
+                    "This is a list of idenitified topics:\n{categories}\nIf the field of study matches one of these, print the element exactly. Otherwise, list its field of study. "
+                cat_list = '- ' + '\n- '.join(c for c in answer_analysis.keys())
+                existing = existing.format(categories=cat_list)
+                topic_prompt = topic_prompt.format(existing=existing)
+                    
+                messages = outputs
+                messages.append(
+                    {
+                        "role": "user", 
+                        "content": topic_prompt
+                    },
+                    )
+                
+                outputs = eval_pipe(
+                    messages,
+                    max_new_tokens=64,
+                    eos_token_id=terminators,
+                    pad_token_id = eval_pipe.tokenizer.eos_token_id,
+                    do_sample=True,
+                    temperature=0.6,
+                    top_p=0.9,
+                )[0]["generated_text"]
+                
+                category = outputs[-1]['content']
                 if category not in answer_analysis:
                     answer_analysis[category] = {"scores": [], "total": 0}
                 
