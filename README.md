@@ -20,16 +20,20 @@ Our project is a web application interface that allows users to upload PDF files
   <code><img width="50" src="https://brandlogos.net/wp-content/uploads/2025/03/langchain-logo_brandlogos.net_9zgaw.png" alt="LangChain" title="LangChain"/></code>
 </div>
 
-## YouTube Demo Link
+## YouTube Demo Link - https://youtu.be/4l5027PMe0E
 
 ## How to Run
+You will need Node [`npm`](https://www.npmjs.com/) and Python [`pip`](https://pypi.org/project/pip/) configured on your device. As well as [NVIDIA's CUDA toolkit](https://developer.nvidia.com/cuda-toolkit) and a CUDA-capable graphics card.
+
 #### Run backend:
 1) `cd backend`
-2) Start virtual environment if not already done so
-3) install packages in requirements.txt: `pip install -r requirements.txt` if not already done so
-4) Run server: `python main.py`
+2) (Create and) Start your virtual environment if you have not already done so
+3) Install packages in requirements.txt: `pip install -r requirements.txt` if you havbe not already done so
+4) Run the server: `python main.py`
 
 #### Run frontend:
 1) `cd frontend`
-2) `npm install` if not already installed packages
+2) `npm install` if you have not already installed the packages
 3) Run web client: `npm run dev`
+
+Check the output of your frontend for the `localhost` port on which it is running. You can find the app there.
